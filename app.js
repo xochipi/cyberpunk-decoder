@@ -1,107 +1,69 @@
+const referenceTracks = [
+  { file: "sounds/track1.mp3", message: "🔓 Codice sbloccato: 1234" },
+  { file: "sounds/track2.mp3", message: "📡 Segnale radio intercettato" },
+  { file: "sounds/track3.mp3", message: "💾 Dati nascosti trovati" }
+];
+
 const startBtn = document.getElementById("startBtn");
-const output = document.getElementById("output");
-const micIndicator = document.getElementById("mic-indicator");
-const micText = document.getElementById("mic-text");
+const statusEl = document.getElementById("status");
+const resultEl = document.getElementById("result");
 
-let listening = false;
 let audioCtx;
-let referenceFingerprints = {};
+let referenceBuffers = [];
 
-// Carichiamo e processiamo i file audio
 async function loadReferenceTracks() {
-  const files = ["track1.mp3", "track2.mp3", "track3.mp3"];
-  for (let file of files) {
-    const response = await fetch(`sounds/${file}`);
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = await audioCtx.decodeAudioData(arrayBuffer);
-    referenceFingerprints[file] = computeFingerprint(buffer);
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  for (let track of referenceTracks) {
+    const resp = await fetch(track.file);
+    const arrBuf = await resp.arrayBuffer();
+    const audioBuf = await audioCtx.decodeAudioData(arrBuf);
+    referenceBuffers.push({ buffer: audioBuf, message: track.message });
   }
-  console.log("Fingerprint caricati:", referenceFingerprints);
 }
 
-// Calcola fingerprint medio di un audio buffer
-function computeFingerprint(audioBuffer) {
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 256;
-  const source = audioCtx.createBufferSource();
-  source.buffer = audioBuffer;
-  source.connect(analyser);
-  analyser.connect(audioCtx.destination);
+function compareAudio(inputBuffer) {
+  for (let ref of referenceBuffers) {
+    // Confronto super semplificato: media di energia del segnale
+    const inputData = inputBuffer.getChannelData(0);
+    const refData = ref.buffer.getChannelData(0);
 
-  const dataArray = new Uint8Array(analyser.frequencyBinCount);
-  source.start();
+    const inputEnergy = inputData.reduce((a, b) => a + Math.abs(b), 0);
+    const refEnergy = refData.reduce((a, b) => a + Math.abs(b), 0);
 
-  return new Promise(resolve => {
-    setTimeout(() => {
-      analyser.getByteFrequencyData(dataArray);
-      source.stop();
-      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-      resolve(avg);
-    }, 1000); // aspettiamo 1 secondo per analizzare
-  });
-}
+    const ratio = inputEnergy / refEnergy;
 
-// Confronta un fingerprint con i reference
-function matchTrack(avg) {
-  let bestMatch = null;
-  let bestDiff = Infinity;
-  for (let track in referenceFingerprints) {
-    const diff = Math.abs(referenceFingerprints[track] - avg);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestMatch = track;
+    if (ratio > 0.8 && ratio < 1.2) {
+      return ref.message;
     }
   }
-  return bestMatch;
+  return null;
 }
 
-// Avvio ascolto microfono
-startBtn.onclick = async () => {
-  if (listening) return;
-  listening = true;
-  output.textContent = "🎤 In ascolto...";
-  micIndicator.classList.add("listening");
-  micText.textContent = "Ascolto...";
-
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+async function startListening() {
+  statusEl.textContent = "🎙️ Attivazione microfono...";
   await loadReferenceTracks();
 
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 256;
   const source = audioCtx.createMediaStreamSource(stream);
+
+  const analyser = audioCtx.createAnalyser();
   source.connect(analyser);
 
-  const dataArray = new Uint8Array(analyser.frequencyBinCount);
-  let seconds = 0;
-  const listenSeconds = 5;
+  const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+  analyser.connect(processor);
+  processor.connect(audioCtx.destination);
 
-  function analyze() {
-    analyser.getByteFrequencyData(dataArray);
-    const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+  statusEl.textContent = "🎙️ Microfono attivo, sto ascoltando...";
 
-    const match = matchTrack(avg);
+  processor.onaudioprocess = (e) => {
+    const inputBuffer = e.inputBuffer;
+    const match = compareAudio(inputBuffer);
+
     if (match) {
-      output.textContent = `✅ Riconosciuta: ${match}`;
-      stopListening(stream);
-      return;
+      resultEl.textContent = match;
     }
-
-    seconds += 0.2;
-    if (seconds < listenSeconds) {
-      requestAnimationFrame(analyze);
-    } else {
-      output.textContent = "❌ Nessuna traccia riconosciuta";
-      stopListening(stream);
-    }
-  }
-
-  analyze();
-};
-
-function stopListening(stream) {
-  listening = false;
-  micIndicator.classList.remove("listening");
-  micText.textContent = "Spento";
-  stream.getTracks().forEach(track => track.stop());
+  };
 }
+
+startBtn.onclick = startListening;
