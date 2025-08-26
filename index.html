@@ -1,16 +1,70 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cyberpunk Radio Decoder</title>
+  <meta charset="UTF-8">
+  <title>Cyberpunk Decoder</title>
   <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <style>
+    body {
+      background: black;
+      color: #0ff;
+      font-family: monospace;
+      text-align: center;
+      padding: 20px;
+    }
+    button {
+      background: #111;
+      color: #0ff;
+      border: 1px solid #0ff;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0ff;
+      color: black;
+    }
+    #output {
+      margin-top: 20px;
+      font-size: 1.2em;
+    }
+    /* Indicatore microfono */
+    #mic-indicator {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.9em;
+    }
+    #mic-light {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: gray;
+    }
+    .listening #mic-light {
+      background: red;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+  </style>
 </head>
 <body>
-  <h1>📡 Cyberpunk Decoder</h1>
-  <button id="startBtn">Avvia ascolto</button>
-  <p id="status">Pronto...</p>
-  <div id="message"></div>
+  <h1>🔊 Cyberpunk Decoder</h1>
+  <button id="startBtn">Inizia ascolto</button>
+  <div id="output">Premi il pulsante per iniziare</div>
+
+  <!-- Indicatore microfono -->
+  <div id="mic-indicator">
+    <div id="mic-light"></div>
+    <span id="mic-text">Spento</span>
+  </div>
 
   <script src="app.js"></script>
 </body>
